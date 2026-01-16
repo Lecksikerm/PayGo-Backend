@@ -1,4 +1,5 @@
 const User = require("../models/user.model");
+const Wallet = require("../models/wallet.model");
 const generateOTP = require("../utils/generateOtp");
 const transporter = require("../config/mail");
 const {
@@ -7,18 +8,18 @@ const {
 } = require("../utils/generateToken");
 
 
+// REGISTER USER
 exports.register = async (req, res, next) => {
     try {
         const { firstName, lastName, email, password } = req.body;
 
-        // Check existing user
         const existingUser = await User.findOne({ email });
         if (existingUser)
             return res.status(400).json({ message: "User already exists" });
 
         // Generate OTP
         const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
         // Create user
         const user = await User.create({
@@ -30,17 +31,16 @@ exports.register = async (req, res, next) => {
             otpExpires,
         });
 
-        // Send OTP Mail
+        // Send OTP email
         await transporter.sendMail({
             from: process.env.MAIL_FROM,
             to: user.email,
             subject: "PayGo Account Verification OTP",
-            text: `Your OTP is: ${otp}. It will expire in 10 minutes.`,
+            text: `Your OTP is: ${otp}. It expires in 10 minutes.`,
         });
 
-        // Response
         res.status(201).json({
-            message: "Registration successful. OTP sent to email.",
+            message: "Registration successful, OTP sent.",
             user: {
                 id: user._id,
                 firstName,
@@ -48,12 +48,15 @@ exports.register = async (req, res, next) => {
                 email,
             },
         });
+
     } catch (err) {
         next(err);
     }
 };
 
 
+
+// VERIFY OTP + CREATE WALLET
 exports.verifyOtp = async (req, res) => {
     try {
         const { email, otp } = req.body;
@@ -68,19 +71,35 @@ exports.verifyOtp = async (req, res) => {
         if (user.otpExpires < new Date())
             return res.status(400).json({ message: "OTP expired" });
 
-        // Update user
         user.isVerified = true;
         user.otp = undefined;
         user.otpExpires = undefined;
         await user.save();
 
+        let wallet = await Wallet.findOne({ user: user._id });
+
+        if (!wallet) {
+            wallet = await Wallet.create({
+                user: user._id,
+                balance: 0,      
+                currency: "NGN", 
+            });
+        }
+
         res.json({
-            message: "OTP verified successfully. You can now log in."
+            message: "OTP verified successfully.",
+            wallet: {
+                id: wallet._id,
+                balance: wallet.balance,
+                currency: wallet.currency
+            }
         });
+
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
+
 
 
 exports.login = async (req, res) => {
