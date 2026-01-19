@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const walletController = require("../controllers/wallet.controller");
+const { setPin, verifyPin } = require("../controllers/pin.controller");
 const auth = require("../middlewares/auth.middleware");
 
 /**
@@ -31,7 +32,7 @@ router.get("/balance", auth, walletController.getWallet);
  * /api/wallet/fund:
  *   post:
  *     tags: [Wallet]
- *     summary: Fund the user's wallet
+ *     summary: Fund the user's wallet (requires 4-digit PIN)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -42,15 +43,20 @@ router.get("/balance", auth, walletController.getWallet);
  *             type: object
  *             required:
  *               - amount
+ *               - pin
  *             properties:
  *               amount:
  *                 type: number
  *                 example: 5000
+ *               pin:
+ *                 type: string
+ *                 example: "1234"
+ *                 description: 4-digit transaction PIN
  *     responses:
  *       200:
  *         description: Wallet funded successfully
  *       400:
- *         description: Invalid request data
+ *         description: Invalid request data or incorrect PIN
  *       401:
  *         description: Unauthorized
  */
@@ -58,10 +64,71 @@ router.post("/fund", auth, walletController.fundWallet);
 
 /**
  * @swagger
+ * /api/wallet/set-pin:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: Set or update the user's 4-digit wallet PIN
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - pin
+ *             properties:
+ *               pin:
+ *                 type: string
+ *                 example: "1234"
+ *     responses:
+ *       200:
+ *         description: PIN created or updated successfully
+ *       400:
+ *         description: Invalid PIN format
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/set-pin", auth, setPin);
+
+/**
+ * @swagger
+ * /api/wallet/verify-pin:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: Verify the user's wallet PIN before sensitive actions
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - pin
+ *             properties:
+ *               pin:
+ *                 type: string
+ *                 example: "1234"
+ *     responses:
+ *       200:
+ *         description: PIN verified successfully
+ *       400:
+ *         description: Incorrect PIN or invalid input
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/verify-pin", auth, verifyPin);
+
+
+/**
+ * @swagger
  * /api/wallet/transfer:
  *   post:
  *     tags: [Wallet]
- *     summary: Transfer funds to another user
+ *     summary: Transfer funds to another user (requires 4-digit PIN)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -73,6 +140,7 @@ router.post("/fund", auth, walletController.fundWallet);
  *             required:
  *               - amount
  *               - email
+ *               - pin
  *             properties:
  *               amount:
  *                 type: number
@@ -80,11 +148,15 @@ router.post("/fund", auth, walletController.fundWallet);
  *               email:
  *                 type: string
  *                 example: "user@example.com"
+ *               pin:
+ *                 type: string
+ *                 example: "1234"
+ *                 description: 4-digit transaction PIN
  *     responses:
  *       200:
  *         description: Transfer successful
  *       400:
- *         description: Invalid input data
+ *         description: Invalid input data or incorrect PIN
  *       401:
  *         description: Unauthorized
  *       404:
@@ -105,12 +177,10 @@ router.post("/transfer", auth, walletController.transfer);
  *         name: page
  *         schema:
  *           type: integer
- *         example: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *         example: 10
  *       - in: query
  *         name: type
  *         schema:
@@ -137,7 +207,6 @@ router.post("/transfer", auth, walletController.transfer);
  *       401:
  *         description: Unauthorized
  */
-
 router.get("/transactions", auth, walletController.getTransactions);
 
 /**
@@ -165,8 +234,8 @@ router.get("/transactions", auth, walletController.getTransactions);
  */
 router.get("/transactions/:id", auth, walletController.getTransactionById);
 
-
 module.exports = router;
+
 
 
 

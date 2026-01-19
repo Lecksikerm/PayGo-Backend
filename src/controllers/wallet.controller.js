@@ -2,6 +2,7 @@ const Wallet = require("../models/wallet.model");
 const Transaction = require("../models/transaction.model");
 const User = require("../models/user.model");
 
+
 exports.getWallet = async (req, res) => {
     const wallet = await Wallet.findOne({ user: req.user.id });
 
@@ -35,15 +36,30 @@ exports.fundWallet = async (req, res) => {
 };
 
 exports.transfer = async (req, res) => {
-    const { recipientEmail, amount } = req.body; // <-- use recipientEmail
+    const { recipientEmail, amount, pin } = req.body;
 
+    // Validate amount
     if (amount <= 0)
         return res.status(400).json({ message: "Invalid amount" });
 
-    const senderWallet = await Wallet.findOne({ user: req.user.id });
+    if (!pin || !/^\d{4}$/.test(pin))
+        return res.status(400).json({ message: "A valid 4-digit PIN is required" });
 
-    // Case-insensitive lookup
-    const receiverUser = await User.findOne({ email: new RegExp(`^${recipientEmail}$`, "i") });
+    // Get sender wallet (with PIN selection)
+    const senderWallet = await Wallet.findOne({ user: req.user.id }).select("+pin");
+
+    if (!senderWallet.pin)
+        return res.status(400).json({ message: "You must set a wallet PIN before making transfers" });
+
+    // Check PIN
+    const isMatch = await senderWallet.matchPin(pin);
+    if (!isMatch)
+        return res.status(400).json({ message: "Incorrect PIN" });
+
+    // Get receiver
+    const receiverUser = await User.findOne({
+        email: new RegExp(`^${recipientEmail}$`, "i")
+    });
 
     if (!receiverUser)
         return res.status(404).json({ message: "Receiver not found" });
@@ -60,7 +76,7 @@ exports.transfer = async (req, res) => {
     senderWallet.balance -= amount;
     await senderWallet.save();
 
-    // Add to receiver
+    // Credit receiver
     receiverWallet.balance += amount;
     await receiverWallet.save();
 
@@ -87,14 +103,13 @@ exports.getTransactions = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Query Params
         let { page = 1, limit = 10, type, startDate, endDate, sort = "desc" } = req.query;
         page = parseInt(page);
         limit = parseInt(limit);
 
         const filter = { user: userId };
 
-        // Filter by type (credit, debit)
+        // Filter by type
         if (type && ["credit", "debit"].includes(type)) {
             filter.type = type;
         }
@@ -105,8 +120,7 @@ exports.getTransactions = async (req, res) => {
             if (startDate) filter.createdAt.$gte = new Date(startDate);
             if (endDate) filter.createdAt.$lte = new Date(endDate);
         }
-
-        // Sort order
+        
         const sortOption = sort === "asc" ? 1 : -1;
 
         const transactions = await Transaction.find(filter)
@@ -152,4 +166,3 @@ exports.getTransactionById = async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 };
-
