@@ -22,6 +22,8 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
+app.use("/api/profile", require("./routes/profile.routes"));
+
 
 // Default route
 app.get("/", (req, res) => {

@@ -8,6 +8,10 @@ const userSchema = new mongoose.Schema(
         email: { type: String, required: true, unique: true },
         password: { type: String, required: true },
 
+        phone: { type: String, default: null },
+        address: { type: String, default: null },
+        avatar: { type: String, default: null },
+
         otp: { type: String },
         otpExpires: { type: Date },
 
@@ -17,17 +21,10 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.pre("save", async function () {
-    if (!this.isModified("password")) {
-        return;
-    }
+    if (!this.isModified("password")) return;
 
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-
-    } catch (err) {
-        throw err;
-    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
 });
 
 
@@ -36,4 +33,5 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 module.exports = mongoose.model("User", userSchema);
+
 
