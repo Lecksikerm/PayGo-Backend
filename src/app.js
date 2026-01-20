@@ -9,6 +9,7 @@ const swaggerSpec = require("./docs/swagger");
 
 const authRoutes = require("./routes/auth.routes");
 const walletRoutes = require("./routes/wallet.routes");
+const adminRoutes = require("./routes/admin.routes");
 
 const app = express();
 
@@ -23,6 +24,8 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/auth", authRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/profile", require("./routes/profile.routes"));
+app.use("/api/admin", require("./routes/admin.routes"));
+
 
 
 // Default route

@@ -16,6 +16,18 @@ const userSchema = new mongoose.Schema(
         otpExpires: { type: Date },
 
         isVerified: { type: Boolean, default: false },
+
+        // Admin fields
+        role: {
+            type: String,
+            enum: ["user", "admin"],
+            default: "user",
+        },
+
+        isSuspended: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
