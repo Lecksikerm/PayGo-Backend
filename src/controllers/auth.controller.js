@@ -1,11 +1,16 @@
 const User = require("../models/user.model");
 const Wallet = require("../models/wallet.model");
 const generateOTP = require("../utils/generateOtp");
-const transporter = require("../config/mail");
 const {
     generateAccessToken,
     generateRefreshToken
 } = require("../utils/generateToken");
+
+const {
+    sendOTPEmail,
+    sendWelcomeEmail,
+    sendPasswordChangedEmail
+} = require("../services/email.service");
 
 
 // REGISTER USER
@@ -17,11 +22,9 @@ exports.register = async (req, res, next) => {
         if (existingUser)
             return res.status(400).json({ message: "User already exists" });
 
-        // Generate OTP
         const otp = generateOTP();
         const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
-        // Create user
         const user = await User.create({
             firstName,
             lastName,
@@ -31,13 +34,9 @@ exports.register = async (req, res, next) => {
             otpExpires,
         });
 
-        // Send OTP email
-        await transporter.sendMail({
-            from: process.env.MAIL_FROM,
-            to: user.email,
-            subject: "PayGo Account Verification OTP",
-            text: `Your OTP is: ${otp}. It expires in 10 minutes.`,
-        });
+        // Send OTP and Welcome emails
+        await sendOTPEmail(user.email, otp);
+        await sendWelcomeEmail(user.email, `${firstName} ${lastName}`);
 
         res.status(201).json({
             message: "Registration successful, OTP sent.",
@@ -55,7 +54,6 @@ exports.register = async (req, res, next) => {
 };
 
 
-
 // VERIFY OTP + CREATE WALLET
 exports.verifyOtp = async (req, res) => {
     try {
@@ -71,18 +69,19 @@ exports.verifyOtp = async (req, res) => {
         if (user.otpExpires < new Date())
             return res.status(400).json({ message: "OTP expired" });
 
+        // Mark user as verified
         user.isVerified = true;
         user.otp = undefined;
         user.otpExpires = undefined;
         await user.save();
 
+        // Create wallet if not exists
         let wallet = await Wallet.findOne({ user: user._id });
-
         if (!wallet) {
             wallet = await Wallet.create({
                 user: user._id,
-                balance: 0,      
-                currency: "NGN", 
+                balance: 0,
+                currency: "NGN",
             });
         }
 
@@ -100,13 +99,12 @@ exports.verifyOtp = async (req, res) => {
     }
 };
 
-
-
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        // Make sure password is selected
+        const user = await User.findOne({ email }).select("+password");
         if (!user)
             return res.status(400).json({ message: "Invalid email or password" });
 
@@ -136,14 +134,14 @@ exports.login = async (req, res) => {
     }
 };
 
+
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
 
         const user = await User.findOne({ email });
-        if (!user) {
+        if (!user)
             return res.status(400).json({ message: "User not found" });
-        }
 
         // Generate reset OTP
         const otp = generateOTP();
@@ -153,15 +151,11 @@ exports.forgotPassword = async (req, res) => {
         user.otpExpires = otpExpires;
         await user.save();
 
-        // Send email
-        await transporter.sendMail({
-            from: process.env.MAIL_FROM,
-            to: email,
-            subject: "PayGo Password Reset OTP",
-            text: `Your OTP for resetting password is: ${otp}. It expires in 10 minutes.`,
-        });
+        // Send OTP email
+        await sendOTPEmail(user.email, otp);
 
         res.json({ message: "OTP sent to email for password reset" });
+
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -171,25 +165,25 @@ exports.resetPassword = async (req, res) => {
     try {
         const { email, otp, newPassword } = req.body;
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).select("+password"); // select password
         if (!user) return res.status(400).json({ message: "User not found" });
 
-        if (user.otp !== otp)
-            return res.status(400).json({ message: "Invalid OTP" });
+        if (user.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
+        if (user.otpExpires < new Date()) return res.status(400).json({ message: "OTP expired" });
 
-        if (user.otpExpires < new Date())
-            return res.status(400).json({ message: "OTP expired" });
-
-        // Change password
         user.password = newPassword;
         user.otp = undefined;
         user.otpExpires = undefined;
         await user.save();
 
+        await sendPasswordChangedEmail(user.email);
+
         res.json({ message: "Password reset successful. You may now log in." });
+
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
+
 };
 
 
