@@ -91,6 +91,16 @@ exports.verifyFunding = async (req, res) => {
         const userId = data.metadata.userId;
         const amount = data.amount / 100;
 
+        // Prevent double-crediting
+        const exists = await Transaction.findOne({ reference });
+        if (exists) {
+            return res.status(200).json({
+                message: "Payment already processed",
+                status: "duplicate",
+                amount: exists.amount
+            });
+        }
+
         const wallet = await Wallet.findOne({ user: userId });
         wallet.balance += amount;
         await wallet.save();
@@ -105,7 +115,6 @@ exports.verifyFunding = async (req, res) => {
         });
 
         const user = await User.findById(userId);
-
         await sendWalletFundedEmail(user.email, amount);
 
         res.status(200).json({
@@ -118,6 +127,7 @@ exports.verifyFunding = async (req, res) => {
         res.status(500).json({ message: "Verification failed" });
     }
 };
+
 
 exports.paystackWebhook = async (req, res) => {
     try {
