@@ -39,6 +39,10 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/admin", adminRoutes);
 
+app.get("/api/ping", (req, res) => {
+  res.status(200).json({ message: "awake" });
+});
+
 app.get("/", (req, res) => {
   res.send("PayGo Backend Running...");
 });
