@@ -23,16 +23,16 @@ const auth = require("../middlewares/auth.middleware");
  *       200:
  *         description: Wallet balance retrieved successfully
  *       401:
- *         description: Unauthorized - token missing or invalid
+ *         description: Unauthorized
  */
 router.get("/balance", auth, walletController.getWallet);
 
 /**
  * @swagger
- * /api/wallet/fund:
+ * /api/wallet/fund/manual:
  *   post:
  *     tags: [Wallet]
- *     summary: Fund the user's wallet (requires 4-digit PIN)
+ *     summary: Fund the wallet manually (development mode)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -43,24 +43,96 @@ router.get("/balance", auth, walletController.getWallet);
  *             type: object
  *             required:
  *               - amount
- *               - pin
  *             properties:
  *               amount:
  *                 type: number
  *                 example: 5000
- *               pin:
- *                 type: string
- *                 example: "1234"
- *                 description: 4-digit transaction PIN
+ *     responses:
+ *       200:
+ *         description: Wallet funded successfully (manual)
+ *       400:
+ *         description: Invalid amount
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/fund/manual", auth, walletController.fundWalletManual);
+
+/**
+ * @swagger
+ * /api/wallet/fund/paystack:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: Initialize Paystack wallet funding
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - amount
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 example: 5000
+ *     responses:
+ *       200:
+ *         description: Paystack payment initialized
+ *       400:
+ *         description: Invalid amount
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/fund/paystack", auth, walletController.fundWalletPaystack);
+
+/**
+ * @swagger
+ * /api/wallet/verify/{reference}:
+ *   get:
+ *     tags: [Wallet]
+ *     summary: Verify Paystack payment (optional, for frontend)
+ *     parameters:
+ *       - in: path
+ *         name: reference
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Paystack transaction reference
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Wallet funded successfully
  *       400:
- *         description: Invalid request data or incorrect PIN
+ *         description: Payment not successful
  *       401:
  *         description: Unauthorized
  */
-router.post("/fund", auth, walletController.fundWallet);
+router.get("/verify/:reference", auth, walletController.verifyFunding);
+
+/**
+ * @swagger
+ * /api/wallet/webhook/paystack:
+ *   post:
+ *     tags: [Wallet]
+ *     summary: Paystack webhook for automatic wallet funding
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *     responses:
+ *       200:
+ *         description: Webhook received and processed
+ */
+router.post(
+  "/webhook/paystack",
+  express.raw({ type: "*/*" }),
+  walletController.paystackWebhook
+);
 
 /**
  * @swagger
@@ -122,7 +194,6 @@ router.post("/set-pin", auth, setPin);
  */
 router.post("/verify-pin", auth, verifyPin);
 
-
 /**
  * @swagger
  * /api/wallet/transfer:
@@ -151,7 +222,6 @@ router.post("/verify-pin", auth, verifyPin);
  *               pin:
  *                 type: string
  *                 example: "1234"
- *                 description: 4-digit transaction PIN
  *     responses:
  *       200:
  *         description: Transfer successful
@@ -234,7 +304,9 @@ router.get("/transactions", auth, walletController.getTransactions);
  */
 router.get("/transactions/:id", auth, walletController.getTransactionById);
 
+
 module.exports = router;
+
 
 
 
