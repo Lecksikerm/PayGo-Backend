@@ -1,8 +1,21 @@
 # PayGo-Bakend
+Slide 1 – Header / Project Title
 
-A Node.js & Express backend for PayGo, a fintech wallet application with user authentication, wallet management, Paystack integration, and transaction history.
+Title: PayGo Backend 🚀
+Subtitle: Node.js & Express backend for a fintech wallet
+Visuals: Wallet icon, Paystack logo, simple background
+Description:
+A Node.js & Express backend for PayGo, a fintech wallet application with:
 
-Table of Contents
+User authentication
+
+Wallet management
+
+Paystack integration
+
+Transaction history
+
+Slide 2 – Table of Contents
 
 Features
 
@@ -22,140 +35,154 @@ Deployment
 
 License
 
-Features
+Slide 3 – Features ✨
 
-User authentication (register, login, forgot/reset password)
+Icons + Bullets for Visual Appeal
 
-OTP verification for signup and password reset
+🔑 User authentication (register, login, forgot/reset password)
 
-Wallet management (balance, manual funding, Paystack funding)
+📨 OTP verification for signup & password reset
 
-Paystack integration for wallet top-ups
+💰 Wallet management (balance, manual & Paystack funding)
 
-Transaction logging (credit/debit)
+🔄 Paystack integration for wallet top-ups
 
-Wallet-to-wallet transfers with PIN verification
+📜 Transaction logging (credit/debit)
 
-Admin and profile routes for management
+💳 Wallet-to-wallet transfers with PIN verification
 
-Email notifications for wallet funding and account actions
+👤 Admin & profile routes for management
 
-Tech Stack
+📧 Email notifications for wallet funding & account actions
 
-Backend: Node.js, Express
+Slide 4 – Tech Stack 🛠️
 
-Database: MongoDB (Mongoose ORM)
+Table or 3 columns with icons
 
-Payments: Paystack API
+Backend	Database	Payments & Email	Docs
+Node.js + Express	MongoDB (Mongoose)	Paystack API	Swagger UI
+JWT Authentication	Atlas	Nodemailer	
+Slide 5 – Setup & Installation ⚡
 
-Emails: Nodemailer
+Step-by-step with code blocks
 
-Documentation: Swagger UI
+1️⃣ Clone the repo
 
-Setup & Installation
-
-Clone the repository:
-
-git clone <https://github.com/Lecksikerm/PayGo-Bakend>
+git clone https://github.com/Lecksikerm/PayGo-Bakend
 cd paygo-backend
 
 
-Install dependencies:
+2️⃣ Install dependencies
 
 npm install
 
 
-Set up environment variables
-Create a .env file in the root directory (see Environment Variables
-)
+3️⃣ Create .env file (see Environment Variables)
 
-Run the development server:
+4️⃣ Run development server
 
 npm run dev
 
 
-Run production server:
+5️⃣ Run production server
 
 npm start
-
-Environment Variables
+----
+Slide 6 – Environment Variables 🗝️
 Key	Description
 PORT	Server port (e.g., 5000)
 MONGO_URI	MongoDB connection string
 JWT_ACCESS_SECRET	JWT secret for access tokens
 JWT_REFRESH_SECRET	JWT secret for refresh tokens
-JWT_ACCESS_SECRET_EXPIRY	Access token expiry (e.g., 1d)
-JWT_REFRESH_SECRET_EXPIRY	Refresh token expiry (e.g., 7d)
-CLOUDINARY_CLOUD_NAME	Cloudinary cloud name for file uploads
+JWT_ACCESS_SECRET_EXPIRY	Access token expiry (1d)
+JWT_REFRESH_SECRET_EXPIRY	Refresh token expiry (7d)
+CLOUDINARY_CLOUD_NAME	Cloudinary cloud name
 CLOUDINARY_API_KEY	Cloudinary API key
 CLOUDINARY_API_SECRET	Cloudinary API secret
 PAYSTACK_PUBLIC_KEY	Paystack public key
 PAYSTACK_SECRET_KEY	Paystack secret key
 PAYSTACK_BASE_URL	Paystack API base URL
-BACKEND_URL	Public backend URL (for webhooks/callbacks)
-MAIL_HOST	SMTP host for emails
+BACKEND_URL	Public backend URL
+MAIL_HOST	SMTP host
 MAIL_PORT	SMTP port
 MAIL_USER	SMTP username
 MAIL_PASS	SMTP password
-MAIL_FROM	Default "from" email
-API Endpoints
-Authentication
+MAIL_FROM	Default sender email
+----
+
+---
+Slide 7 – API Endpoints (Authentication) 🔐
 Endpoint	Method	Description
-/api/auth/register	POST	Register new user & send OTP
-/api/auth/verify-otp	POST	Verify OTP after registration
+/api/auth/register	POST	Register user & send OTP
+/api/auth/verify-otp	POST	Verify OTP
 /api/auth/login	POST	Login user
 /api/auth/forgot-password	POST	Send OTP for password reset
-/api/auth/reset-password	POST	Reset password using OTP
-Wallet
+/api/auth/reset-password	POST	Reset password with OTP
+---
+
+---
+Slide 8 – API Endpoints (Wallet) 💰
 Endpoint	Method	Description
-/api/wallet/balance	GET	Get user wallet balance
-/api/wallet/fund/manual	POST	Manually fund wallet (dev/testing)
+/api/wallet/balance	GET	Get wallet balance
+/api/wallet/fund/manual	POST	Manual wallet funding
 /api/wallet/fund/paystack	POST	Initialize Paystack payment
-/api/wallet/verify/:reference	GET	Verify Paystack transaction (frontend)
-/api/wallet/webhook/paystack	POST	Paystack webhook for auto wallet funding
-/api/wallet/set-pin	POST	Set or update 4-digit wallet PIN
-/api/wallet/verify-pin	POST	Verify PIN before sensitive actions
-/api/wallet/transfer	POST	Transfer funds to another user
-/api/wallet/transactions	GET	Paginated & filtered transaction history
-/api/wallet/transactions/:id	GET	Get single transaction by ID
-Profile
+/api/wallet/verify/:reference	GET	Verify Paystack transaction
+/api/wallet/webhook/paystack	POST	Auto wallet funding
+/api/wallet/set-pin	POST	Set/update 4-digit wallet PIN
+/api/wallet/verify-pin	POST	Verify PIN before actions
+/api/wallet/transfer	POST	Wallet-to-wallet transfer
+/api/wallet/transactions	GET	Paginated transaction history
+/api/wallet/transactions/:id	GET	Get single transaction
+---
+
+---
+Slide 9 – API Endpoints (Profile & Admin) 👤
+
+Profile:
+
 Endpoint	Method	Description
 /api/profile	GET	Get user profile info
 /api/profile	PUT	Update profile info
-Admin
+
+Admin:
+
 Endpoint	Method	Description
 /api/admin/users	GET	Get all users (admin only)
 /api/admin/[id]/suspend	POST	Suspend user account
 /api/admin/[id]/activate	POST	Restore suspended account
-Paystack Webhooks
+---
 
-Paystack sends events to your backend at:
+---
+Slide 10 – Paystack Webhooks 🔔
 
-POST /api/wallet/webhook/paystack
+Endpoint: POST /api/wallet/webhook/paystack
 
+Auto funds wallet on charge.success
 
-Used for automatic wallet funding.
+Validates HMAC signature for security
 
-HMAC signature validation ensures requests are authentic.
+Prevents double-processing of transactions
+---
 
-Testing
+---
+Slide 11 – Testing 🧪
 
-Use Postman or Insomnia for API requests.
+Use Postman / Insomnia for API requests
 
-For Paystack testing:
+Use Paystack test cards for payments
 
-Use test cards provided by Paystack
+For webhook testing: ngrok or deployed backend must be public
+---
 
-Ensure backend is publicly accessible (ngrok or deployed) for webhooks.
+---
+Slide 12 – Deployment 🚀
 
-Deployment
+1️⃣ Deploy backend to Render / Heroku / Railway / Vercel
+2️⃣ Update BACKEND_URL in .env to deployed URL
+3️⃣ Connect frontend to deployed backend API
+---
 
-Deploy backend to Render, Heroku, Railway, or Vercel
+---
+Slide 13 – License ⚖️
 
-Update BACKEND_URL in .env to the deployed URL
-
-Frontend should now point to the deployed backend URL for API requests
-
-License
-
-This project is licensed under the MIT License.
+MIT License
