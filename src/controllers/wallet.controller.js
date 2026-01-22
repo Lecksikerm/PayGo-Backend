@@ -238,9 +238,6 @@ exports.transfer = async (req, res) => {
     }
 };
 
-// =============================
-// LIST TRANSACTIONS
-// =============================
 exports.getTransactions = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -285,9 +282,6 @@ exports.getTransactions = async (req, res) => {
     }
 };
 
-// =============================
-// GET SINGLE TRANSACTION
-// =============================
 exports.getTransactionById = async (req, res) => {
     try {
         const userId = req.user.id;
