@@ -6,29 +6,15 @@ const userSchema = new mongoose.Schema(
         firstName: { type: String, required: true },
         lastName: { type: String, required: true },
         email: { type: String, required: true, unique: true },
-
         password: { type: String, required: true, select: false },
-
         phone: { type: String, default: null },
         address: { type: String, default: null },
         avatar: { type: String, default: null },
-
         otp: { type: String },
         otpExpires: { type: Date },
-
         isVerified: { type: Boolean, default: false },
-
-        // Admin fields
-        role: {
-            type: String,
-            enum: ["user", "admin"],
-            default: "user",
-        },
-
-        isSuspended: {
-            type: Boolean,
-            default: false,
-        },
+        role: { type: String, enum: ["user", "admin"], default: "user" },
+        isSuspended: { type: Boolean, default: false },
     },
     { timestamps: true }
 );
@@ -41,10 +27,12 @@ userSchema.pre("save", async function () {
 });
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
+    if (!this.password) throw new Error("Password not selected");
     return bcrypt.compare(enteredPassword, this.password);
 };
 
 module.exports = mongoose.model("User", userSchema);
+
 
 
 

@@ -6,14 +6,14 @@ const auth = require("../controllers/auth.controller");
  * @swagger
  * tags:
  *   name: Auth
- *   description: User authentication & verification
+ *   description: User authentication
  */
 
 /**
  * @swagger
  * /api/auth/register:
  *   post:
- *     summary: Register a new user and receive OTP via email
+ *     summary: Register a new user (no OTP required)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -41,41 +41,11 @@ const auth = require("../controllers/auth.controller");
  *                 example: strongpassword123
  *     responses:
  *       201:
- *         description: User registered successfully. OTP sent to email.
+ *         description: User registered successfully. You can now log in.
  *       400:
  *         description: User already exists.
  */
 router.post("/register", auth.register);
-
-/**
- * @swagger
- * /api/auth/verify-otp:
- *   post:
- *     summary: Verify user OTP sent to email
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otp
- *             properties:
- *               email:
- *                 type: string
- *                 example: johndoe@example.com
- *               otp:
- *                 type: string
- *                 example: "123456"
- *     responses:
- *       200:
- *         description: OTP verified successfully.
- *       400:
- *         description: Invalid or expired OTP.
- */
-router.post("/verify-otp", auth.verifyOtp);
 
 /**
  * @swagger
@@ -103,7 +73,7 @@ router.post("/verify-otp", auth.verifyOtp);
  *       200:
  *         description: Login successful
  *       400:
- *         description: Invalid credentials or account not verified
+ *         description: Invalid credentials
  */
 router.post("/login", auth.login);
 
@@ -111,21 +81,25 @@ router.post("/login", auth.login);
  * @swagger
  * /api/auth/forgot-password:
  *   post:
- *     tags: [Auth]
  *     summary: Send OTP to email for password reset
+ *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - email
  *             properties:
  *               email:
  *                 type: string
  *                 example: user@example.com
  *     responses:
  *       200:
- *         description: OTP sent successfully
+ *         description: OTP sent successfully for password reset
+ *       400:
+ *         description: User not found
  */
 router.post("/forgot-password", auth.forgotPassword);
 
@@ -133,14 +107,18 @@ router.post("/forgot-password", auth.forgotPassword);
  * @swagger
  * /api/auth/reset-password:
  *   post:
- *     tags: [Auth]
  *     summary: Reset user password using email + OTP
+ *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - email
+ *               - otp
+ *               - newPassword
  *             properties:
  *               email:
  *                 type: string
@@ -154,9 +132,12 @@ router.post("/forgot-password", auth.forgotPassword);
  *     responses:
  *       200:
  *         description: Password reset successful
+ *       400:
+ *         description: Invalid OTP or OTP expired
  */
 router.post("/reset-password", auth.resetPassword);
 
 module.exports = router;
+
 
 

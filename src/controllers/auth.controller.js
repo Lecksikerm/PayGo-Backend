@@ -9,6 +9,7 @@ const {
     sendPasswordChangedEmail
 } = require("../services/email.service");
 
+// REGISTER USER
 exports.register = async (req, res, next) => {
     try {
         const { firstName, lastName, email, password } = req.body;
@@ -17,25 +18,26 @@ exports.register = async (req, res, next) => {
         if (existingUser)
             return res.status(400).json({ message: "User already exists" });
 
-        // Generate OTP for email verification
-        const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
         const user = await User.create({
             firstName,
             lastName,
             email,
             password,
-            otp,
-            otpExpires,
+            isVerified: true, 
         });
 
-        // Send OTP and Welcome emails
-        await sendOTPEmail(user.email, otp);
+        // Create wallet automatically
+        await Wallet.create({
+            user: user._id,
+            balance: 0,
+            currency: "NGN",
+        });
+
+        // Send welcome email only
         await sendWelcomeEmail(user.email, `${firstName} ${lastName}`);
 
         res.status(201).json({
-            message: "Registration successful, OTP sent.",
+            message: "Registration successful. You can now log in.",
             user: {
                 id: user._id,
                 firstName,
@@ -43,49 +45,8 @@ exports.register = async (req, res, next) => {
                 email,
             },
         });
-
     } catch (err) {
         next(err);
-    }
-};
-
-exports.verifyOtp = async (req, res) => {
-    try {
-        const { email, otp } = req.body;
-
-        const user = await User.findOne({ email });
-        if (!user) return res.status(400).json({ message: "User not found" });
-
-        if (user.otp !== otp) return res.status(400).json({ message: "Invalid OTP" });
-        if (user.otpExpires < new Date()) return res.status(400).json({ message: "OTP expired" });
-
-        // Mark user as verified
-        user.isVerified = true;
-        user.otp = undefined;
-        user.otpExpires = undefined;
-        await user.save();
-
-        // Create wallet if it doesn't exist
-        let wallet = await Wallet.findOne({ user: user._id });
-        if (!wallet) {
-            wallet = await Wallet.create({
-                user: user._id,
-                balance: 0,
-                currency: "NGN",
-            });
-        }
-
-        res.json({
-            message: "OTP verified successfully.",
-            wallet: {
-                id: wallet._id,
-                balance: wallet.balance,
-                currency: wallet.currency
-            }
-        });
-
-    } catch (err) {
-        res.status(500).json({ message: err.message });
     }
 };
 
