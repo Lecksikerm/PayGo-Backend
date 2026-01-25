@@ -21,39 +21,6 @@ const getWallet = async (req, res) => {
 };
 
 /**
- * MANUAL FUNDING (DEV ONLY)
- */
-const fundWalletManual = async (req, res) => {
-    try {
-        if (process.env.NODE_ENV === "production")
-            return res.status(403).json({ message: "Manual funding disabled in production" });
-
-        const { amount } = req.body;
-        if (!amount || amount <= 0)
-            return res.status(400).json({ message: "Invalid amount" });
-
-        const wallet = await Wallet.findOneAndUpdate(
-            { user: req.user.id },
-            { $inc: { balance: amount } },
-            { new: true }
-        );
-
-        await Transaction.create({
-            user: req.user.id,
-            type: "credit",
-            amount,
-            description: "Manual wallet funding (dev mode)"
-        });
-
-        await sendWalletFundedEmail(req.user.email, amount);
-
-        res.json({ message: "Wallet funded", balance: wallet.balance });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-
-/**
  * INIT PAYSTACK FUNDING
  */
 const fundWalletPaystack = async (req, res) => {
@@ -74,9 +41,9 @@ const fundWalletPaystack = async (req, res) => {
         if (pending)
             return res.status(409).json({ message: "You already have a pending wallet funding" });
 
-        // Initialize Paystack transaction
+        // Initialize Paystack transaction - use authenticated user's email
         const response = await paystack.post("/transaction/initialize", {
-            email: req.user.email,
+            email: req.user.email,  // ✅ Get email from authenticated user
             amount: amount * 100,
             callback_url: `${process.env.FRONTEND_URL}/wallet/verify`,
             metadata: { userId }
@@ -106,7 +73,7 @@ const fundWalletPaystack = async (req, res) => {
 };
 
 /**
- * VERIFY PAYSTACK PAYMENT (Frontend Optional)
+ * VERIFY PAYSTACK PAYMENT (Auto-verify for frontend)
  */
 const verifyFunding = async (req, res) => {
     try {
@@ -116,9 +83,7 @@ const verifyFunding = async (req, res) => {
         const verify = await paystack.get(`/transaction/verify/${reference}`);
         const payment = verify.data.data;
 
-        // 🔹 Add debug logs here
         console.log("Paystack verify data:", payment);
-        console.log("Reference from params:", reference);
 
         if (payment.status !== "success")
             return res.status(400).json({ message: "Payment not successful" });
@@ -129,13 +94,11 @@ const verifyFunding = async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
 
-        // Add debug log before updating transaction
         const tx = await Transaction.findOneAndUpdate(
             { reference, status: "pending" },
             { status: "successful" },
             { new: true, session }
         );
-        console.log("Pending transaction found:", tx);
 
         if (!tx) {
             await session.abortTransaction();
@@ -167,7 +130,6 @@ const verifyFunding = async (req, res) => {
     }
 };
 
-
 /**
  * PAYSTACK WEBHOOK (Auto-complete)
  */
@@ -176,7 +138,6 @@ const paystackWebhook = async (req, res) => {
         const rawBody = req.body.toString();
         const signature = req.headers["x-paystack-signature"];
 
-        // Verify signature
         const hash = crypto
             .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
             .update(rawBody)
@@ -186,7 +147,6 @@ const paystackWebhook = async (req, res) => {
 
         const event = JSON.parse(rawBody);
 
-        // Only process successful charges
         if (event.event !== "charge.success") return res.status(200).send("Event ignored");
 
         const { reference, amount, metadata } = event.data;
@@ -196,7 +156,6 @@ const paystackWebhook = async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
 
-        // Idempotent update
         const tx = await Transaction.findOneAndUpdate(
             { reference, status: "pending" },
             { status: "successful" },
@@ -209,7 +168,6 @@ const paystackWebhook = async (req, res) => {
             return res.status(200).send("Already processed");
         }
 
-        // Credit wallet
         const wallet = await Wallet.findOneAndUpdate(
             { user: userId },
             { $inc: { balance: creditedAmount } },
@@ -370,7 +328,6 @@ const getTransactionById = async (req, res) => {
 
 module.exports = {
     getWallet,
-    fundWalletManual,
     fundWalletPaystack,
     verifyFunding,
     paystackWebhook,
@@ -378,11 +335,3 @@ module.exports = {
     getTransactions,
     getTransactionById
 };
-
-
-
-
-
-
-
-
