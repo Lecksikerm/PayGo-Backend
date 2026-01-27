@@ -10,7 +10,13 @@ const transporter = nodemailer.createTransport({
     },
     tls: {
         rejectUnauthorized: false,
-    }
+    },
+    
+    // Add rate limiting to avoid spamming
+    pool: true,
+    maxConnections: 3,
+    rateDelta: 1000,
+    rateLimit: 5,
 });
 
 async function sendEmail(to, subject, text, html = null) {
@@ -103,7 +109,7 @@ async function sendWalletFundedEmail(to, amount, balance) {
             </p>
         </div>
     `;
-    
+
     return sendEmail(
         to,
         "Wallet Funded Successfully",
@@ -195,8 +201,8 @@ module.exports = {
     sendSuspensionEmail,
     sendUnsuspensionEmail,
     sendWalletFundedEmail,
-    sendTransferSentEmail,     
-    sendTransferReceivedEmail,  
+    sendTransferSentEmail,
+    sendTransferReceivedEmail,
     sendPaymentReceiptEmail,
 };
 

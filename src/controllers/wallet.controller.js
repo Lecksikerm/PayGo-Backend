@@ -4,8 +4,8 @@ const User = require("../models/user.model");
 const paystack = require("../services/paystack.service");
 const {
     sendWalletFundedEmail,
-    sendTransferSentEmail,      
-    sendTransferReceivedEmail   
+    sendTransferSentEmail,
+    sendTransferReceivedEmail
 } = require("../services/email.service");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
@@ -83,7 +83,7 @@ const fundWalletPaystack = async (req, res) => {
             reference: reference,
             status: "pending",
             description: "Pending Paystack wallet funding",
-            authorizationUrl: authorizationUrl 
+            authorizationUrl: authorizationUrl
         });
 
         res.status(200).json({
@@ -152,7 +152,7 @@ const verifyFunding = async (req, res) => {
         });
     } catch (err) {
         console.error("Verify Funding Error:", err.response?.data || err);
-        res.status(500).json({ message: "Verification failed" }); 
+        res.status(500).json({ message: "Verification failed" });
     }
 };
 
@@ -212,7 +212,6 @@ const paystackWebhook = async (req, res) => {
         res.status(500).send("Webhook Error");
     }
 };
-
 /**
  * TRANSFER FUNDS
  */
@@ -283,30 +282,24 @@ const transfer = async (req, res) => {
 
         await saveBeneficiaryFromTransfer(req.user.id, receiverUser);
 
-        // ========== SEND EMAIL NOTIFICATIONS ==========
-        try {
-            const senderName = `${sender.firstName} ${sender.lastName}`;
-            const receiverName = `${receiverUser.firstName} ${receiverUser.lastName}`;
+        // ========== SEND EMAIL NOTIFICATIONS (Fire and Forget) ==========
+        const senderName = `${sender.firstName} ${sender.lastName}`;
+        const receiverName = `${receiverUser.firstName} ${receiverUser.lastName}`;
 
-            // Email to Sender
-            await sendTransferSentEmail(
-                sender.email,
-                receiverName,
-                amount,
-                senderWallet.balance
-            );
+        sendTransferSentEmail(
+            sender.email,
+            receiverName,
+            amount,
+            senderWallet.balance
+        ).catch(err => console.error("Sender email failed:", err));
 
-            // Email to Receiver
-            await sendTransferReceivedEmail(
-                receiverUser.email,
-                senderName,
-                amount,
-                receiverWallet.balance
-            );
-        } catch (emailErr) {
-            console.error("Failed to send transfer emails:", emailErr);
-        }
-
+        sendTransferReceivedEmail(
+            receiverUser.email,
+            senderName,
+            amount,
+            receiverWallet.balance
+        ).catch(err => console.error("Receiver email failed:", err));
+       
         res.json({
             message: "Transfer successful",
             newBalance: senderWallet.balance
