@@ -13,7 +13,6 @@ const {
     saveBeneficiaryFromTransfer,
 } = require("../controllers/beneficiary.controller");
 
-
 /**
  * GET WALLET BALANCE
  */
@@ -39,7 +38,6 @@ const fundWalletPaystack = async (req, res) => {
         if (!amount || amount < 100)
             return res.status(400).json({ message: "Minimum funding is ₦100" });
 
-        // Prevent duplicate pending transactions
         const pending = await Transaction.findOne({
             user: userId,
             type: "credit",
@@ -47,7 +45,6 @@ const fundWalletPaystack = async (req, res) => {
         });
 
         if (pending) {
-
             return res.status(200).json({
                 status: true,
                 message: "You have a pending transaction",
@@ -56,22 +53,14 @@ const fundWalletPaystack = async (req, res) => {
             });
         }
 
-        // Generate truly unique reference with timestamp and random
-        const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 10000);
-        const reference = `PAYGO_${userId}_${timestamp}_${random}`;
+        const reference = `PAYGO_${userId}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-        // Initialize Paystack transaction
         const response = await paystack.post("/transaction/initialize", {
             email: req.user.email,
             amount: amount * 100,
-            reference: reference,
+            reference,
             callback_url: `${process.env.FRONTEND_URL}/wallet/verify`,
-            metadata: {
-                userId,
-                amount,
-                timestamp
-            }
+            metadata: { userId, amount }
         });
 
         const authorizationUrl = response.data.data.authorization_url;
@@ -80,20 +69,20 @@ const fundWalletPaystack = async (req, res) => {
             user: userId,
             type: "credit",
             amount,
-            reference: reference,
+            reference,
             status: "pending",
             description: "Pending Paystack wallet funding",
-            authorizationUrl: authorizationUrl
+            authorizationUrl
         });
 
         res.status(200).json({
             status: true,
             authorization_url: authorizationUrl,
-            reference: reference,
+            reference,
             email: req.user.email
         });
     } catch (err) {
-        console.error("Paystack Init Error:", err.response?.data || err);
+        console.error("Paystack Init Error:", err);
         res.status(500).json({ message: "Unable to initialize payment" });
     }
 };
@@ -104,12 +93,8 @@ const fundWalletPaystack = async (req, res) => {
 const verifyFunding = async (req, res) => {
     try {
         const { reference } = req.params;
-
-        // Call Paystack API to verify
         const verify = await paystack.get(`/transaction/verify/${reference}`);
         const payment = verify.data.data;
-
-        console.log("Paystack verify data:", payment);
 
         if (payment.status !== "success")
             return res.status(400).json({ message: "Payment not successful" });
@@ -132,7 +117,6 @@ const verifyFunding = async (req, res) => {
             return res.json({ status: "duplicate", message: "Payment already processed" });
         }
 
-        // Update wallet
         const wallet = await Wallet.findOneAndUpdate(
             { user: userId },
             { $inc: { balance: creditedAmount } },
@@ -143,81 +127,76 @@ const verifyFunding = async (req, res) => {
         session.endSession();
 
         const user = await User.findById(userId);
-        sendWalletFundedEmail(user.email, creditedAmount, wallet.balance)
-            .catch(err => console.error("Funding email failed:", err));
+        sendWalletFundedEmail(user.email, creditedAmount, wallet.balance).catch(() => { });
 
         res.status(200).json({
             message: "Wallet funded successfully",
             amount: creditedAmount,
             newBalance: wallet.balance
         });
-
     } catch (err) {
-        console.error("Verify Funding Error:", err.response?.data || err);
         res.status(500).json({ message: "Verification failed" });
     }
 };
 
 /**
- * PAYSTACK WEBHOOK
- */
+* PAYSTACK WEBHOOK (SAFE, NON-BREAKING)
+*/
 const paystackWebhook = async (req, res) => {
     try {
-        const rawBody = req.body.toString();
-        const signature = req.headers["x-paystack-signature"];
+        const secret = process.env.PAYSTACK_SECRET_KEY;
 
         const hash = crypto
-            .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
-            .update(rawBody)
+            .createHmac("sha512", secret)
+            .update(JSON.stringify(req.body))
             .digest("hex");
 
-        if (hash !== signature) return res.status(401).send("Invalid signature");
-
-        const event = JSON.parse(rawBody);
-
-        if (event.event !== "charge.success") return res.status(200).send("Event ignored");
-
-        const { reference, amount, metadata } = event.data;
-        const userId = metadata.userId;
-        const creditedAmount = amount / 100;
-
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        const tx = await Transaction.findOneAndUpdate(
-            { reference, status: "pending" },
-            { status: "successful" },
-            { new: true, session }
-        );
-
-        if (!tx) {
-            await session.abortTransaction();
-            session.endSession();
-            return res.status(200).send("Already processed");
+        if (hash !== req.headers["x-paystack-signature"]) {
+            return res.sendStatus(401);
         }
 
-        const wallet = await Wallet.findOneAndUpdate(
-            { user: userId },
-            { $inc: { balance: creditedAmount } },
-            { new: true, session }
-        );
+        const event = req.body;
 
-        await session.commitTransaction();
-        session.endSession();
+        if (event.event === "charge.success") {
+            const { reference, amount, metadata } = event.data;
 
-        const user = await User.findById(userId);
-        sendWalletFundedEmail(user.email, creditedAmount, wallet.balance)
-            .catch(err => console.error("Webhook funding email failed:", err));
+            const existingTx = await Transaction.findOne({ reference });
+            if (existingTx && existingTx.status === "successful") {
+                return res.sendStatus(200);
+            }
 
-        res.status(200).send("OK");
+            const userId = metadata?.userId;
+            if (!userId) return res.sendStatus(200);
+
+            const session = await mongoose.startSession();
+            session.startTransaction();
+
+            await Transaction.findOneAndUpdate(
+                { reference },
+                { status: "successful" },
+                { session }
+            );
+
+            await Wallet.findOneAndUpdate(
+                { user: userId },
+                { $inc: { balance: amount / 100 } },
+                { session }
+            );
+
+            await session.commitTransaction();
+            session.endSession();
+        }
+
+        res.sendStatus(200);
     } catch (err) {
-        console.error("Webhook Error:", err);
-        res.status(500).send("Webhook Error");
+        console.error("Webhook error:", err.message);
+        res.sendStatus(200);
     }
 };
 
+
 /**
- * TRANSFER FUNDS (with sender info and notifications)
+ * TRANSFER FUNDS
  */
 const transfer = async (req, res) => {
     try {
@@ -235,21 +214,19 @@ const transfer = async (req, res) => {
         const email = recipientEmail.trim().toLowerCase();
 
         const sender = await User.findById(req.user.id).select("+walletPin");
-        if (!sender.walletPin) {
+        if (!sender.walletPin)
             return res.status(400).json({ message: "Set a wallet PIN before transfers" });
-        }
 
         const isMatch = await sender.matchPin(pin);
-        if (!isMatch) {
+        if (!isMatch)
             return res.status(400).json({ message: "Incorrect PIN" });
-        }
 
         const senderWallet = await Wallet.findOne({ user: req.user.id });
-        if (!senderWallet) {
+        if (!senderWallet)
             return res.status(404).json({ message: "Sender wallet not found" });
-        }
 
         const receiverUser = await User.findOne({ email });
+
         if (!receiverUser)
             return res.status(404).json({ message: "Receiver not found" });
 
@@ -265,76 +242,59 @@ const transfer = async (req, res) => {
 
         const senderName = `${sender.firstName} ${sender.lastName}`;
         const receiverName = `${receiverUser.firstName} ${receiverUser.lastName}`;
+        const baseRef = `TRF_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+        const debitRef = `${baseRef}_DB`;
+        const creditRef = `${baseRef}_CR`;
 
-        // Perform transfer
         senderWallet.balance -= amount;
         receiverWallet.balance += amount;
 
         await senderWallet.save();
         await receiverWallet.save();
 
-        // Create DEBIT transaction for sender
         const debitTransaction = await Transaction.create({
             user: req.user.id,
             type: "debit",
             amount,
+            reference: debitRef,
+            status: "successful",
             description: `Transfer to ${receiverName}`,
             recipientInfo: {
                 userId: receiverUser._id,
                 name: receiverName,
-                email: email,
+                email
             }
         });
 
-        // Create CREDIT transaction for receiver with sender info
-        const creditTransaction = await Transaction.create({
+        await Transaction.create({
             user: receiverUser._id,
             type: "credit",
             amount,
+            reference: creditRef,
+            status: "successful",
             description: `Received from ${senderName}`,
             senderInfo: {
                 userId: sender._id,
                 name: senderName,
-                email: sender.email,
+                email: sender.email
             }
         });
 
-        // Create notifications
-        const Notification = require("../models/notification.model");
-
-        // Notification for sender (debit)
-        Notification.create({
-            user: req.user.id,
-            type: "debit",
-            title: "Money Sent",
-            message: `You sent ₦${amount.toLocaleString()} to ${receiverName}`,
-            amount: amount,
-            relatedTransaction: debitTransaction._id,
-        });
-
-        // Notification for receiver (credit)
-        Notification.create({
-            user: receiverUser._id,
-            type: "credit",
-            title: "Money Received!",
-            message: `You received ₦${amount.toLocaleString()} from ${senderName}`,
-            amount: amount,
-            relatedTransaction: creditTransaction._id,
-        });
-
-        // Save beneficiary
         await saveBeneficiaryFromTransfer(req.user.id, receiverUser);
 
-        // Send emails in background
-        sendTransferSentEmail(sender.email, receiverName, amount, senderWallet.balance)
-            .catch(err => console.error("Sender email failed:", err));
-
-        sendTransferReceivedEmail(receiverUser.email, senderName, amount, receiverWallet.balance)
-            .catch(err => console.error("Receiver email failed:", err));
+        sendTransferSentEmail(sender.email, receiverName, amount, senderWallet.balance).catch(() => { });
+        sendTransferReceivedEmail(receiverUser.email, senderName, amount, receiverWallet.balance).catch(() => { });
 
         res.json({
             message: "Transfer successful",
-            newBalance: senderWallet.balance
+            newBalance: senderWallet.balance,
+            transaction: {
+                reference: debitTransaction.reference,
+                amount: debitTransaction.amount,
+                recipientEmail: email,
+                createdAt: debitTransaction.createdAt,
+                status: debitTransaction.status
+            }
         });
     } catch (err) {
         console.error("Transfer Error:", err);
@@ -343,41 +303,24 @@ const transfer = async (req, res) => {
 };
 
 /**
- * GET TRANSACTIONS (Paginated)
+ * GET TRANSACTIONS
  */
 const getTransactions = async (req, res) => {
     try {
         const userId = req.user.id;
-        let { page = 1, limit = 10, type, startDate, endDate, sort = "desc" } = req.query;
+        let { page = 1, limit = 10 } = req.query;
 
-        page = parseInt(page);
-        limit = parseInt(limit);
-
-        const filter = { user: userId };
-
-        if (type && ["credit", "debit"].includes(type))
-            filter.type = type;
-
-        if (startDate || endDate) {
-            filter.createdAt = {};
-            if (startDate) filter.createdAt.$gte = new Date(startDate + "T00:00:00Z");
-            if (endDate) filter.createdAt.$lte = new Date(endDate + "T23:59:59Z");
-        }
-
-        const sortOption = sort === "asc" ? 1 : -1;
-
-        const transactions = await Transaction.find(filter)
-            .sort({ createdAt: sortOption })
+        const transactions = await Transaction.find({ user: userId })
+            .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
-            .limit(limit);
+            .limit(Number(limit));
 
-        const total = await Transaction.countDocuments(filter);
+        const total = await Transaction.countDocuments({ user: userId });
 
         res.json({
-            page,
-            limit,
+            page: Number(page),
+            limit: Number(limit),
             total,
-            totalPages: Math.ceil(total / limit),
             transactions
         });
     } catch (err) {
@@ -386,23 +329,26 @@ const getTransactions = async (req, res) => {
 };
 
 /**
- * GET TRANSACTION BY ID
- */
+* GET SINGLE TRANSACTION BY ID
+*/
 const getTransactionById = async (req, res) => {
     try {
-        const userId = req.user.id;
         const { id } = req.params;
 
-        const tx = await Transaction.findOne({ _id: id, user: userId });
+        const transaction = await Transaction.findOne({
+            _id: id,
+            user: req.user.id
+        });
 
-        if (!tx)
+        if (!transaction)
             return res.status(404).json({ message: "Transaction not found" });
 
-        res.json({ transaction: tx });
+        res.json({ transaction });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
+
 
 module.exports = {
     getWallet,
